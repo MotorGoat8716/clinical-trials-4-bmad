@@ -1,0 +1,102 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.search-controls {
+  margin: 20px;
+}
+
+.search-controls input {
+  margin: 0 10px;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.search-controls button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.error {
+  color: red;
+}
+
+/* Total Count Display - Below search filters */
+.total-count-display {
+  margin: 25px 20px 20px 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.count-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.total-number {
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #2c5aa0;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.count-label {
+  font-size: 1.2em;
+  color: #495057;
+  font-weight: 500;
+}
+
+.accuracy-badge {
+  background: #28a745;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-left: 8px;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.display-note {
+  font-size: 0.9em;
+  color: #6c757d;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+.search-results {
+  margin: 20px;
+}
+
+.trial-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.trial-card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 10px;
+  width: 300px;
+  text-align: left;
+}
+
+.trial-card h3 {
+  margin-top: 0;
+}
