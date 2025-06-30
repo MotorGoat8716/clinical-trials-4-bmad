@@ -37,13 +37,6 @@ app.get('/api/trials/search', async (req, res) => {
       delete searchParams.status;
     }
     
-    // Convert comma-separated values to arrays for multiselect filters
-    const multiselectFields = ['studyStatus', 'phase', 'age', 'funderType'];
-    multiselectFields.forEach(field => {
-      if (searchParams[field] && typeof searchParams[field] === 'string') {
-        searchParams[field] = searchParams[field].split(',').map(v => v.trim());
-      }
-    });
 
     // Use ClinicalTrials.gov API wrapper for real-time data with comprehensive filters
     const searchResult = await clinicalTrialsApi.searchTrials(searchParams);

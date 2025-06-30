@@ -65,6 +65,89 @@ class ClinicalTrialsFiltersV2 {
         working: true
       },
       
+      phase: {
+       label: 'Phase',
+       apiParam: 'aggFilters',
+       type: 'select',
+       options: [
+         { value: 'phase:0', label: 'Phase 0' },
+         { value: 'phase:1', label: 'Phase 1' },
+         { value: 'phase:2', label: 'Phase 2' },
+         { value: 'phase:3', label: 'Phase 3' },
+         { value: 'phase:4', label: 'Phase 4' }
+       ],
+       description: 'Search for studies in a specific clinical trial phase',
+       working: true
+     },
+
+     studyStatus: {
+       label: 'Study Status',
+       apiParam: 'query.status',
+       type: 'select',
+       options: [
+         { value: 'RECRUITING', label: 'Recruiting' },
+         { value: 'NOT_YET_RECRUITING', label: 'Not Yet Recruiting' },
+         { value: 'ACTIVE_NOT_RECRUITING', label: 'Active, Not Recruiting' },
+         { value: 'COMPLETED', label: 'Completed' },
+         { value: 'ENROLLING_BY_INVITATION', label: 'Enrolling by Invitation' },
+         { value: 'TERMINATED', label: 'Terminated' },
+         { value: 'WITHDRAWN', label: 'Withdrawn' },
+       ],
+       description: 'Filter by study recruitment status',
+       working: true
+     },
+     ageGroup: {
+       label: 'Age Group',
+       apiParam: 'query.age',
+       type: 'select',
+       options: [
+         { value: 'CHILD', label: 'Child (birth-17)' },
+         { value: 'ADULT', label: 'Adult (18-64)' },
+         { value: 'OLDER_ADULT', label: 'Older Adult (65+)' }
+       ],
+       description: 'Filter by participant age group',
+       working: true
+     },
+     sex: {
+       label: 'Sex/Gender',
+       apiParam: 'query.sex',
+       type: 'select',
+       options: [
+         { value: 'MALE', label: 'Male' },
+         { value: 'FEMALE', label: 'Female' },
+         { value: 'ALL', label: 'All' }
+       ],
+       description: 'Filter by participant sex',
+       working: true
+     },
+     studyType: {
+       label: 'Study Type',
+       apiParam: 'query.type',
+       type: 'select',
+       options: [
+         { value: 'INTERVENTIONAL', label: 'Interventional' },
+         { value: 'OBSERVATIONAL', label: 'Observational' },
+         { value: 'EXPANDED_ACCESS', label: 'Expanded Access' }
+       ],
+       description: 'Filter by the type of study',
+       working: true
+     },
+     funderType: {
+       label: 'Funder Type',
+       apiParam: 'query.funder',
+       type: 'select',
+       options: [
+         { value: 'NIH', label: 'U.S. National Institutes of Health (NIH)' },
+         { value: 'FED', label: 'Other U.S. Federal Agency' },
+         { value: 'INDIV', label: 'Individual' },
+         { value: 'INDUSTRY', label: 'Industry' },
+         { value: 'NETWORK', label: 'Network' },
+         { value: 'OTHER', label: 'Other' },
+         { value: 'UNKNOWN', label: 'Unknown' }
+       ],
+       description: 'Filter by the type of funding source',
+       working: true
+     },
       // Page size and pagination
       pageSize: {
         label: 'Results per page',
@@ -80,7 +163,8 @@ class ClinicalTrialsFiltersV2 {
         description: 'Number of results to return per page',
         working: true,
         default: 100
-      }
+      },
+      
     };
   }
   
@@ -125,7 +209,9 @@ class ClinicalTrialsFiltersV2 {
           break;
           
         case 'select':
-          if (typeof filterValue === 'string' && filterValue.trim()) {
+          if (Array.isArray(filterValue)) {
+            params[apiParam] = filterValue.join(',');
+          } else if (typeof filterValue === 'string' && filterValue.trim()) {
             params[apiParam] = filterValue.trim();
           } else if (typeof filterValue === 'number') {
             params[apiParam] = filterValue;
@@ -235,30 +321,9 @@ class ClinicalTrialsFiltersV2 {
    * Legacy parameter mapping for backward compatibility
    */
   static mapLegacyParams(params) {
-    const mapped = { ...params };
-    
-    // Map old parameter names to new ones
-    if (mapped.status && !mapped.studyStatus) {
-      console.warn('Legacy parameter "status" detected, but not supported in API v2');
-      delete mapped.status;
-    }
-    
-    if (mapped.phase) {
-      console.warn('Legacy parameter "phase" detected, but not supported in API v2');
-      delete mapped.phase;
-    }
-    
-    if (mapped.age) {
-      console.warn('Legacy parameter "age" detected, but not supported in API v2');
-      delete mapped.age;
-    }
-    
-    if (mapped.sex) {
-      console.warn('Legacy parameter "sex" detected, but not supported in API v2');
-      delete mapped.sex;
-    }
-    
-    return mapped;
+    // This function is now deprecated as all params should be using the new system.
+    // Returning a copy of params to avoid side effects.
+    return { ...params };
   }
 }
 

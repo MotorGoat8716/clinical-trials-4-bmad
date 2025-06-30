@@ -175,15 +175,8 @@ class ClinicalTrialsApiWrapper {
       console.warn('Filter warnings:', validation.warnings.join(', '));
     }
     const apiParams = this.buildApiParams(mappedParams);
-    const cacheKey = this.getCacheKey(apiParams);
 
-    // Check cache first
-    const cachedResult = this.cache.get(cacheKey);
-    if (cachedResult && this.isCacheValid(cachedResult)) {
-      console.log(`Cache hit for query: ${apiParams['query.term'] || 'complex query'}`);
-      return cachedResult.data;
-    }
-
+    let cachedResult;
     try {
       console.log(`Querying ClinicalTrials.gov API with single optimized call`);
       
@@ -194,6 +187,13 @@ class ClinicalTrialsApiWrapper {
         countTotal: true // Ensure we get the total count
       };
       
+      const cacheKey = this.getCacheKey(finalApiParams);
+      cachedResult = this.cache.get(cacheKey);
+      if (cachedResult && this.isCacheValid(cachedResult)) {
+        console.log(`Cache hit for query: ${JSON.stringify(finalApiParams)}`);
+        return cachedResult.data;
+      }
+
       console.log('Final API Parameters:', finalApiParams);
 
       const response = await axios.get(CLINICAL_TRIALS_API_URL, {

@@ -7,6 +7,12 @@ function App() {
     condition: '',
     location: '',
     phase: '',
+    studyStatus: '',
+    ageGroup: '',
+    sex: '',
+    studyType: '',
+    funderType: '',
+    otherTerms: '',
   });
   const [searchResults, setSearchResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -53,11 +59,55 @@ function App() {
             value={searchParams.location}
             onChange={handleInputChange}
           />
+          <select name="phase" value={searchParams.phase} onChange={handleInputChange}>
+            <option value="">All Phases</option>
+            <option value="phase:0">Phase 0</option>
+            <option value="phase:1">Phase 1</option>
+            <option value="phase:2">Phase 2</option>
+            <option value="phase:3">Phase 3</option>
+            <option value="phase:4">Phase 4</option>
+          </select>
+          <select name="studyStatus" value={searchParams.studyStatus} onChange={handleInputChange}>
+            <option value="">All Statuses</option>
+            <option value="RECRUITING">Recruiting</option>
+            <option value="NOT_YET_RECRUITING">Not Yet Recruiting</option>
+            <option value="ACTIVE_NOT_RECRUITING">Active, Not Recruiting</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="ENROLLING_BY_INVITATION">Enrolling by Invitation</option>
+            <option value="TERMINATED">Terminated</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+          </select>
+          <select name="ageGroup" value={searchParams.ageGroup} onChange={handleInputChange}>
+            <option value="">All Age Groups</option>
+            <option value="CHILD">Child (birth-17)</option>
+            <option value="ADULT">Adult (18-64)</option>
+            <option value="OLDER_ADULT">Older Adult (65+)</option>
+          </select>
+          <select name="sex" value={searchParams.sex} onChange={handleInputChange}>
+            <option value="">All Sexes</option>
+            <option value="MALE">Male</option>
+            <option value="FEMALE">Female</option>
+          </select>
+          <select name="studyType" value={searchParams.studyType} onChange={handleInputChange}>
+            <option value="">All Study Types</option>
+            <option value="INTERVENTIONAL">Interventional</option>
+            <option value="OBSERVATIONAL">Observational</option>
+            <option value="EXPANDED_ACCESS">Expanded Access</option>
+          </select>
+          <select name="funderType" value={searchParams.funderType} onChange={handleInputChange}>
+            <option value="">All Funder Types</option>
+            <option value="NIH">NIH</option>
+            <option value="FED">Other U.S. Federal Agency</option>
+            <option value="INDIV">Individual</option>
+            <option value="INDUSTRY">Industry</option>
+            <option value="NETWORK">Network</option>
+            <option value="OTHER">Other</option>
+          </select>
           <input
-            type="number"
-            name="phase"
-            placeholder="Phase (e.g., 2)"
-            value={searchParams.phase}
+            type="text"
+            name="otherTerms"
+            placeholder="Other Terms (e.g., drug, device)"
+            value={searchParams.otherTerms}
             onChange={handleInputChange}
           />
           <button onClick={handleSearch} disabled={loading}>
