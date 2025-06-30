@@ -82,7 +82,7 @@ class ClinicalTrialsFiltersV2 {
 
      studyStatus: {
        label: 'Study Status',
-       apiParam: 'query.status',
+       apiParam: 'filter.overallStatus',
        type: 'select',
        options: [
          { value: 'RECRUITING', label: 'Recruiting' },
@@ -186,9 +186,22 @@ class ClinicalTrialsFiltersV2 {
     Object.keys(filters).forEach(filterKey => {
       const filterValue = filters[filterKey];
       
-      // Skip empty values
-      if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) {
+      // Skip empty values, but handle empty string specifically for select filters
+      if (filterValue === null || filterValue === undefined || 
+          (Array.isArray(filterValue) && filterValue.length === 0)) {
         return;
+      }
+      
+      // Skip empty strings for text filters, but allow them to be processed for select filters
+      // (empty string for select filters means "All" which should not send the parameter)
+      if (typeof filterValue === 'string' && filterValue.trim() === '') {
+        const filterConfig = filterCategories[filterKey];
+        if (filterConfig && filterConfig.type === 'text') {
+          return; // Skip empty text values
+        }
+        if (filterConfig && filterConfig.type === 'select') {
+          return; // Skip empty select values (means "All")
+        }
       }
       
       const filterConfig = filterCategories[filterKey];

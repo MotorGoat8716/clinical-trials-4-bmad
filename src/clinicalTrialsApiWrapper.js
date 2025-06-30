@@ -176,49 +176,73 @@ class ClinicalTrialsApiWrapper {
     }
     const apiParams = this.buildApiParams(mappedParams);
 
-    let cachedResult;
+    const cacheKey = this.getCacheKey(apiParams);
+    let cachedResult = this.cache.get(cacheKey);
+    if (cachedResult && this.isCacheValid(cachedResult)) {
+      console.log(`Cache hit for query: ${JSON.stringify(apiParams)}`);
+      return cachedResult.data;
+    }
+
     try {
-      console.log(`Querying ClinicalTrials.gov API with single optimized call`);
+      console.log(`Querying ClinicalTrials.gov API with pagination support`);
       
-      // Build params for a single, efficient API call
-      const finalApiParams = {
+      let allStudies = [];
+      let nextPageToken = null;
+      let totalCount = 0;
+      let pageNum = 0;
+      const maxPages = 10; // Safety break to avoid infinite loops
+
+      const initialParams = {
         ...apiParams,
-        pageSize: 1000, // Max page size
-        countTotal: true // Ensure we get the total count
+        pageSize: 1000,
+        countTotal: true
       };
-      
-      const cacheKey = this.getCacheKey(finalApiParams);
-      cachedResult = this.cache.get(cacheKey);
-      if (cachedResult && this.isCacheValid(cachedResult)) {
-        console.log(`Cache hit for query: ${JSON.stringify(finalApiParams)}`);
-        return cachedResult.data;
+
+      console.log('Initial API Parameters:', initialParams);
+
+      do {
+        pageNum++;
+        const pageParams = { ...initialParams };
+        if (nextPageToken) {
+          pageParams.pageToken = nextPageToken;
+        }
+
+        const response = await axios.get(CLINICAL_TRIALS_API_URL, {
+          params: pageParams,
+          timeout: 20000
+        });
+
+        const studies = response.data.studies || [];
+        allStudies = allStudies.concat(studies);
+        
+        if (pageNum === 1) {
+          totalCount = response.data.totalCount || 0;
+        }
+        
+        nextPageToken = response.data.nextPageToken || null;
+        
+        console.log(`Page ${pageNum}: Fetched ${studies.length} studies. Total fetched: ${allStudies.length}. Next page: ${!!nextPageToken}`);
+
+      } while (nextPageToken && pageNum < maxPages);
+
+      if (pageNum >= maxPages && nextPageToken) {
+        console.warn(`Reached max page limit (${maxPages}). Results may be incomplete.`);
       }
 
-      console.log('Final API Parameters:', finalApiParams);
-
-      const response = await axios.get(CLINICAL_TRIALS_API_URL, {
-        params: finalApiParams,
-        timeout: 20000
-      });
-
-      const studies = response.data.studies || [];
-      const totalCount = response.data.totalCount || studies.length;
       const isSmallResultSet = totalCount <= 10;
 
-      console.log(`API returned ${studies.length} studies with a total count of ${totalCount}`);
-
       const result = {
-        studies: isSmallResultSet ? studies : [],
-        totalCount: totalCount,
-        nextPageToken: response.data.nextPageToken || null,
-        sourceUrl: `${CLINICAL_TRIALS_API_URL}?${new URLSearchParams(finalApiParams).toString()}`,
-        apiParams: finalApiParams,
+        studies: allStudies,
+        totalCount: totalCount || allStudies.length,
+        nextPageToken: null, // Final result has no next page
+        sourceUrl: `${CLINICAL_TRIALS_API_URL}?${new URLSearchParams(initialParams).toString()}`,
+        apiParams: initialParams,
         timestamp: new Date().toISOString(),
-        accurateTotal: true,
+        accurateTotal: !nextPageToken, // Total is accurate if we fetched all pages
         isSmallResultSet: isSmallResultSet,
         isLargeResultSet: !isSmallResultSet,
         note: !isSmallResultSet
-          ? `Large result set (${totalCount} trials). Use more specific filters to see detailed summaries.`
+          ? `Large result set (${totalCount} trials). Displaying all ${allStudies.length} fetched results.`
           : null
       };
 
