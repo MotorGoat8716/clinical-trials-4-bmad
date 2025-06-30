@@ -79,9 +79,9 @@ function App() {
           </select>
           <select name="ageGroup" value={searchParams.ageGroup} onChange={handleInputChange}>
             <option value="">All Age Groups</option>
-            <option value="CHILD">Child (birth-17)</option>
-            <option value="ADULT">Adult (18-64)</option>
-            <option value="OLDER_ADULT">Older Adult (65+)</option>
+            <option value="ages:child">Child (birth-17)</option>
+            <option value="ages:adult">Adult (18-64)</option>
+            <option value="ages:older">Older Adult (65+)</option>
           </select>
           <select name="sex" value={searchParams.sex} onChange={handleInputChange}>
             <option value="">All Sexes</option>

@@ -96,18 +96,18 @@ class ClinicalTrialsFiltersV2 {
        description: 'Filter by study recruitment status',
        working: true
      },
-     ageGroup: {
-       label: 'Age Group',
-       apiParam: 'query.age',
-       type: 'select',
-       options: [
-         { value: 'CHILD', label: 'Child (birth-17)' },
-         { value: 'ADULT', label: 'Adult (18-64)' },
-         { value: 'OLDER_ADULT', label: 'Older Adult (65+)' }
-       ],
-       description: 'Filter by participant age group',
-       working: true
-     },
+      ageGroup: {
+        label: 'Age Group',
+        apiParam: 'aggFilters',
+        type: 'select',
+        options: [
+          { value: 'ages:child', label: 'Child (birth-17)' },
+          { value: 'ages:adult', label: 'Adult (18-64)' },
+          { value: 'ages:older', label: 'Older Adult (65+)' }
+        ],
+        description: 'Filter by participant age group',
+        working: true
+      },
      sex: {
        label: 'Sex/Gender',
        apiParam: 'query.sex',
@@ -176,6 +176,7 @@ class ClinicalTrialsFiltersV2 {
       format: 'json'
     };
     const filterCategories = this.getFilterCategories();
+    const aggFiltersValues = [];
     
     // Set default page size
     if (!filters.pageSize) {
@@ -213,6 +214,15 @@ class ClinicalTrialsFiltersV2 {
       
       const apiParam = filterConfig.apiParam;
       
+      // Special handling for aggFilters - collect all values
+      if (apiParam === 'aggFilters') {
+        if (typeof filterValue === 'string' && filterValue.trim()) {
+          aggFiltersValues.push(filterValue.trim());
+        }
+        return;
+      }
+      
+      
       // Handle different filter types
       switch (filterConfig.type) {
         case 'text':
@@ -238,6 +248,11 @@ class ClinicalTrialsFiltersV2 {
           }
       }
     });
+    
+    // Combine all aggFilters values
+    if (aggFiltersValues.length > 0) {
+      params.aggFilters = aggFiltersValues.join(',');
+    }
     
     return params;
   }
