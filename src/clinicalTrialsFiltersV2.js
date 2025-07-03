@@ -1,5 +1,5 @@
 /**
- * ClinicalTrials.gov API v2 Filter System
+ * ClinicalTrials.gov API v2 Filter System - UPDATED WITH LOCATION FIX
  * Based on actual working parameters from the API
  */
 
@@ -108,14 +108,14 @@ class ClinicalTrialsFiltersV2 {
         description: 'Filter by participant age group',
         working: true
       },
+
      sex: {
        label: 'Sex/Gender',
-       apiParam: 'query.sex',
+       apiParam: 'aggFilters',
        type: 'select',
        options: [
-         { value: 'MALE', label: 'Male' },
-         { value: 'FEMALE', label: 'Female' },
-         { value: 'ALL', label: 'All' }
+         { value: 'sex:m', label: 'Male' },
+         { value: 'sex:f', label: 'Female' }
        ],
        description: 'Filter by participant sex',
        working: true
@@ -169,92 +169,109 @@ class ClinicalTrialsFiltersV2 {
   }
   
   /**
-   * Build API parameters from filter object
+   * Build API parameters from filter object - FIXED FOR API COMPATIBILITY
    */
   static buildApiParams(filters) {
     const params = {
-      format: 'json'
+      format: 'json',
+      viewType: 'Card',
+      limit: 100
     };
-    const filterCategories = this.getFilterCategories();
-    const aggFiltersValues = [];
     
-    // Set default page size
-    if (!filters.pageSize) {
-      params.pageSize = 100;
+    const aggFilters = [];
+  
+    // Handle basic parameters
+    if (filters.condition) {
+      params.cond = filters.condition;  // Changed from 'query.cond'
     }
     
-    // Process each filter
-    Object.keys(filters).forEach(filterKey => {
-      const filterValue = filters[filterKey];
-      
-      // Skip empty values, but handle empty string specifically for select filters
-      if (filterValue === null || filterValue === undefined || 
-          (Array.isArray(filterValue) && filterValue.length === 0)) {
-        return;
-      }
-      
-      // Skip empty strings for text filters, but allow them to be processed for select filters
-      // (empty string for select filters means "All" which should not send the parameter)
-      if (typeof filterValue === 'string' && filterValue.trim() === '') {
-        const filterConfig = filterCategories[filterKey];
-        if (filterConfig && filterConfig.type === 'text') {
-          return; // Skip empty text values
-        }
-        if (filterConfig && filterConfig.type === 'select') {
-          return; // Skip empty select values (means "All")
-        }
-      }
-      
-      const filterConfig = filterCategories[filterKey];
-      if (!filterConfig) {
-        // For unknown filters, try direct mapping for backward compatibility
-        console.warn(`Unknown filter: ${filterKey}, trying direct mapping`);
-        return;
-      }
-      
-      const apiParam = filterConfig.apiParam;
-      
-      // Special handling for aggFilters - collect all values
-      if (apiParam === 'aggFilters') {
-        if (typeof filterValue === 'string' && filterValue.trim()) {
-          aggFiltersValues.push(filterValue.trim());
-        }
-        return;
-      }
-      
-      
-      // Handle different filter types
-      switch (filterConfig.type) {
-        case 'text':
-          if (typeof filterValue === 'string' && filterValue.trim()) {
-            params[apiParam] = filterValue.trim();
-          }
-          break;
-          
-        case 'select':
-          if (Array.isArray(filterValue)) {
-            params[apiParam] = filterValue.join(',');
-          } else if (typeof filterValue === 'string' && filterValue.trim()) {
-            params[apiParam] = filterValue.trim();
-          } else if (typeof filterValue === 'number') {
-            params[apiParam] = filterValue;
-          }
-          break;
-          
-        default:
-          // Default to string handling
-          if (filterValue) {
-            params[apiParam] = filterValue;
-          }
-      }
-    });
+    if (filters.location) {
+      params.locStr = filters.location;  // Changed from 'query.locn'
+    }
     
-    // Combine all aggFilters values
-    if (aggFiltersValues.length > 0) {
-      params.aggFilters = aggFiltersValues.join(',');
+    // Handle aggFilters
+    if (filters.sex) {
+      aggFilters.push(filters.sex);
+    }
+    
+    if (filters.phase) {
+      aggFilters.push(filters.phase);
+    }
+    
+    if (filters.studyStatus) {
+      aggFilters.push(filters.studyStatus);
+    }
+    
+    if (filters.ageGroup) {
+      aggFilters.push(filters.ageGroup);
+    }
+    
+    // Combine all aggFilters
+    if (aggFilters.length > 0) {
+      params.aggFilters = aggFilters.join(',');
     }
     
     return params;
+  }
+
+  /**
+   * Helper function to get full state name from abbreviation
+   */
+  static getFullStateName(abbr) {
+    const stateMap = {
+      'MA': 'Massachusetts',
+      'NY': 'New York',
+      'CA': 'California',
+      'TX': 'Texas',
+      'FL': 'Florida',
+      'IL': 'Illinois',
+      'PA': 'Pennsylvania',
+      'OH': 'Ohio',
+      'GA': 'Georgia',
+      'NC': 'North Carolina',
+      'MI': 'Michigan',
+      'NJ': 'New Jersey',
+      'VA': 'Virginia',
+      'WA': 'Washington',
+      'AZ': 'Arizona',
+      'TN': 'Tennessee',
+      'IN': 'Indiana',
+      'MO': 'Missouri',
+      'MD': 'Maryland',
+      'WI': 'Wisconsin',
+      'CO': 'Colorado',
+      'MN': 'Minnesota',
+      'SC': 'South Carolina',
+      'AL': 'Alabama',
+      'LA': 'Louisiana',
+      'KY': 'Kentucky',
+      'OR': 'Oregon',
+      'OK': 'Oklahoma',
+      'CT': 'Connecticut',
+      'UT': 'Utah',
+      'IA': 'Iowa',
+      'NV': 'Nevada',
+      'AR': 'Arkansas',
+      'MS': 'Mississippi',
+      'KS': 'Kansas',
+      'NM': 'New Mexico',
+      'NE': 'Nebraska',
+      'ID': 'Idaho',
+      'WV': 'West Virginia',
+      'HI': 'Hawaii',
+      'NH': 'New Hampshire',
+      'ME': 'Maine',
+      'MT': 'Montana',
+      'RI': 'Rhode Island',
+      'DE': 'Delaware',
+      'SD': 'South Dakota',
+      'ND': 'North Dakota',
+      'AK': 'Alaska',
+      'VT': 'Vermont',
+      'WY': 'Wyoming'
+    };
+    
+    return stateMap[abbr.toUpperCase()] || abbr;
   }
   
   /**

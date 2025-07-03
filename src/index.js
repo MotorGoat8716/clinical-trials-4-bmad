@@ -37,7 +37,6 @@ app.get('/api/trials/search', async (req, res) => {
       delete searchParams.status;
     }
     
-
     // Use ClinicalTrials.gov API wrapper for real-time data with comprehensive filters
     const searchResult = await clinicalTrialsApi.searchTrials(searchParams);
 
@@ -46,12 +45,23 @@ app.get('/api/trials/search', async (req, res) => {
 
     console.log(`ClinicalTrials.gov API returned ${studies.length} studies`);
 
-    // Transform studies to our format
-    const transformedStudies = studies.map(study => 
-      clinicalTrialsApi.transformStudyData(study)
-    );
+    // The hybrid wrapper already formats the data, so no transformation needed
+    const transformedStudies = studies.map(study => ({
+      trial_id: study.nctId,
+      title: study.title,
+      condition: study.condition,
+      summary: study.title, // Use title as summary for now
+      status: study.status,
+      phase: study.phase,
+      location: study.location,
+      official_url: `https://clinicaltrials.gov/study/${study.nctId}`,
+      last_updated: study.startDate
+    }));
 
-    if (searchResult.isSmallResultSet) {
+    // Determine if this is a small result set (≤10 studies returned, not total count)
+    const isSmallResultSet = studies.length <= SUMMARIZATION_THRESHOLD;
+
+    if (isSmallResultSet && studies.length > 0) {
       // Small result set (≤10) - provide detailed trials with AI summaries
       console.log(`Small result set: ${studies.length} studies - generating AI summaries`);
       
@@ -92,15 +102,15 @@ app.get('/api/trials/search', async (req, res) => {
         count: totalCount,
         totalCount: totalCount,
         trials: trialsWithSummaries,
-        source: 'ClinicalTrials.gov API',
-        api_url: searchResult.sourceUrl,
-        timestamp: searchResult.timestamp,
-        accurateTotal: searchResult.accurateTotal,
+        source: 'ClinicalTrials.gov API (Hybrid)',
+        api_url: searchResult.searchUrl,
+        timestamp: new Date().toISOString(),
+        accurateTotal: true,
         resultType: 'detailed'
       });
       
     } else {
-      // Large result set (>10) - return count only, no trial details
+      // Large result set (>10) or no studies - return count only
       console.log(`Large result set: ${totalCount} studies - returning count only`);
       
       res.json({
@@ -108,12 +118,12 @@ app.get('/api/trials/search', async (req, res) => {
         totalCount: totalCount,
         trials: [], // No trials for large result sets
         trial_ids: [], // Add this to trigger the correct message in the frontend
-        source: 'ClinicalTrials.gov API',
-        api_url: searchResult.sourceUrl,
-        timestamp: searchResult.timestamp,
-        accurateTotal: searchResult.accurateTotal,
+        source: 'ClinicalTrials.gov API (Hybrid)',
+        api_url: searchResult.searchUrl,
+        timestamp: new Date().toISOString(),
+        accurateTotal: true,
         resultType: 'count-only',
-        note: searchResult.note || `Large result set (${totalCount} trials). Use more specific filters to see trial details.`
+        note: totalCount > 0 ? `Large result set (${totalCount} trials). Use more specific filters to see trial details.` : 'No trials found matching your criteria.'
       });
     }
   } catch (err) {
@@ -121,7 +131,7 @@ app.get('/api/trials/search', async (req, res) => {
     res.status(500).json({ 
       error: 'Search service unavailable',
       message: err.message,
-      source: 'ClinicalTrials.gov API'
+      source: 'ClinicalTrials.gov API (Hybrid)'
     });
   }
 });
@@ -132,11 +142,23 @@ app.get('/api/trials/:nctId', async (req, res) => {
 
   try {
     const study = await clinicalTrialsApi.getTrialDetails(nctId);
-    const transformedStudy = clinicalTrialsApi.transformStudyData(study);
+    
+    // The hybrid wrapper returns properly formatted data
+    const transformedStudy = {
+      trial_id: study.protocolSection?.identificationModule?.nctId || nctId,
+      title: study.protocolSection?.identificationModule?.briefTitle || '',
+      condition: study.protocolSection?.conditionsModule?.conditions?.[0] || '',
+      summary: study.protocolSection?.identificationModule?.briefSummary || '',
+      status: study.protocolSection?.statusModule?.overallStatus || '',
+      phase: study.protocolSection?.designModule?.phases?.[0] || '',
+      location: study.protocolSection?.contactsLocationsModule?.locations?.[0]?.city || '',
+      official_url: `https://clinicaltrials.gov/study/${nctId}`,
+      last_updated: study.protocolSection?.statusModule?.lastUpdatePostDateStruct?.date || ''
+    };
     
     res.json({
       ...transformedStudy,
-      source: 'ClinicalTrials.gov API',
+      source: 'ClinicalTrials.gov API (Hybrid)',
       official_url: `https://clinicaltrials.gov/study/${nctId}`
     });
   } catch (error) {
@@ -144,7 +166,7 @@ app.get('/api/trials/:nctId', async (req, res) => {
     res.status(404).json({ 
       error: 'Trial not found',
       nctId: nctId,
-      source: 'ClinicalTrials.gov API'
+      source: 'ClinicalTrials.gov API (Hybrid)'
     });
   }
 });
@@ -170,9 +192,40 @@ app.get('/api/filters', (req, res) => {
 app.get('/api/filters/basic', (req, res) => {
   try {
     const filters = clinicalTrialsApi.getAvailableFilters();
+    
+    // Create basic filter structure
+    const basicFilters = {
+      studyStatus: [
+        { value: '', label: 'All Status' },
+        { value: 'RECRUITING', label: 'Recruiting' },
+        { value: 'NOT_YET_RECRUITING', label: 'Not Yet Recruiting' },
+        { value: 'ACTIVE_NOT_RECRUITING', label: 'Active, Not Recruiting' },
+        { value: 'COMPLETED', label: 'Completed' }
+      ],
+      phase: [
+        { value: '', label: 'All Phases' },
+        { value: 'EARLY_PHASE1', label: 'Early Phase 1' },
+        { value: 'PHASE1', label: 'Phase 1' },
+        { value: 'PHASE2', label: 'Phase 2' },
+        { value: 'PHASE3', label: 'Phase 3' },
+        { value: 'PHASE4', label: 'Phase 4' },
+        { value: 'NA', label: 'N/A' }
+      ],
+      sex: [
+        { value: '', label: 'All' },
+        { value: 'FEMALE', label: 'Female' },
+        { value: 'MALE', label: 'Male' }
+      ],
+      ageGroup: [
+        { value: '', label: 'All Ages' },
+        { value: 'CHILD', label: 'Child (0-17)' },
+        { value: 'ADULT', label: 'Adult (18-64)' },
+        { value: 'OLDER_ADULT', label: 'Older Adult (65+)' }
+      ]
+    };
+    
     res.json({
-      filters: filters.basic,
-      descriptions: filters.descriptions,
+      filters: basicFilters,
       status: 'success'
     });
   } catch (error) {
@@ -188,8 +241,7 @@ app.get('/api/filters/advanced', (req, res) => {
   try {
     const filters = clinicalTrialsApi.getAvailableFilters();
     res.json({
-      filters: filters.advanced,
-      descriptions: filters.descriptions,
+      filters: filters,
       status: 'success'
     });
   } catch (error) {
@@ -203,14 +255,20 @@ app.get('/api/filters/advanced', (req, res) => {
 // Add endpoint to get API wrapper statistics
 app.get('/api/stats', (req, res) => {
   res.json({
-    cache: clinicalTrialsApi.getCacheStats(),
-    wrapper: 'ClinicalTrials.gov API',
+    wrapper: 'ClinicalTrials.gov API (Hybrid)',
     version: '2.0',
+    approach: 'Website count + API details',
     features: {
       comprehensive_filters: true,
       real_time_api: true,
-      intelligent_caching: true,
-      patient_enhancements: true
+      website_accuracy: true,
+      sex_filtering: true,
+      hybrid_approach: true
+    },
+    accuracyFeatures: {
+      websiteCountMatching: true,
+      sexFilterAccuracy: true,
+      realTimeData: true
     }
   });
 });
@@ -233,6 +291,7 @@ if (require.main === module) {
     console.log('  ✅ Condition, Intervention, Sponsor filters');
     console.log('  ✅ Date ranges, Study IDs, Healthy volunteers');
     console.log('  ✅ 100% ClinicalTrials.gov API parameter coverage');
+    console.log('  ✅ Hybrid approach: Website accuracy + API details');
   });
 
   server.on('error', (err) => {

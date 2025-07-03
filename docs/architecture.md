@@ -29,28 +29,26 @@ The MVP implements a comprehensive wrapper around ClinicalTrials.gov with the fo
 | **Backend Services** | Node.js/Python (Monolithic or few services) | A simplified backend structure reduces deployment and maintenance overhead for the MVP. |
 | **ClinicalTrials.gov Integration** | **Real-time API Integration with Intelligent Caching** | Direct integration with ClinicalTrials.gov API for real-time data access. Intelligent caching prevents redundant API calls while ensuring data currency. Implements all official search parameters. |
 | **Database** | **PostgreSQL (Managed Service) + Caching Layer** | Managed PostgreSQL for user data and cached trial information. Includes full-text search capabilities and structured caching of ClinicalTrials.gov responses with timestamp tracking. |
-| **Search Service** | **Hybrid ClinicalTrials.gov API + PostgreSQL** | Primary searches utilize ClinicalTrials.gov API with comprehensive filter support. PostgreSQL provides caching, user-specific data (saved trials), and enhanced search features. |
+| **Search Service** | **Hybrid: Website Scraping + API v2** | To ensure 100% count accuracy, the service first scrapes the ClinicalTrials.gov search results page for the total count, then uses the API to fetch rich details. This mirrors the exact patient experience. |
 | **AVA AI Service** | **Google Gemini API (or similar)** | The core of the AI functionality. |
 | **AVA Cost Control** | **Controlled Summarization Logic** | This is the most critical cost-control measure. As defined in the PRD, AVA will only generate summaries when the search result set is small (e.g., <=10). This prevents uncontrolled LLM API calls and associated costs. |
 | **Authentication** | Managed Auth Service (e.g., Supabase Auth, Auth0) | Reduces development time and security risks associated with building a custom authentication service. |
 | **Hosting** | Serverless or PaaS (e.g., Vercel, Netlify, AWS ECS) | Pay-for-what-you-use models are ideal for an MVP with variable initial traffic. |
 
-### 3.2. Data Flow for Trial Search (Wrapper Architecture)
+### 3.2. Data Flow for Trial Search (Hybrid Wrapper Architecture)
 
-1.  **User Initiates Search:** User enters query using comprehensive filter interface matching ClinicalTrials.gov functionality.
-2.  **Filter Translation:** Backend translates user interface selections to official ClinicalTrials.gov API parameters.
-3.  **Cache Check:** System checks for cached results matching exact search parameters within acceptable freshness window.
-4.  **API Query:** If cache miss or stale data, system queries ClinicalTrials.gov API with complete filter parameters.
-5.  **Data Enhancement:** 
-    *   Raw ClinicalTrials.gov data is cached with timestamp
-    *   For result sets ≤10 trials, AVA generates plain language summaries
-    *   Medical terms are identified and linked to glossary definitions
-    *   Distance calculations added if location services enabled
-6.  **Response Assembly:** Combined response includes:
-    *   Official ClinicalTrials.gov data with direct source links
-    *   Platform enhancements clearly marked as supplementary
-    *   Pagination and sorting matching source functionality
-7.  **Display:** UI presents enhanced data while maintaining clear connection to authoritative source.
+1.  **User Initiates Search:** User enters query using a comprehensive filter interface.
+2.  **Parallel Queries:** The backend initiates two parallel processes:
+    *   **A) Website Count Query:** A request is sent to the ClinicalTrials.gov **website search URL** with the user's parameters. The system parses the returned HTML to extract the **exact total study count**.
+    *   **B) API Details Query:** A request is sent to the ClinicalTrials.gov **API v2** with the same parameters to fetch rich, structured data for the trials.
+3.  **Cache Check & Update:** The system checks for cached data for both the website count and the API results. If data is stale or missing, the live query results are used and the cache is updated.
+4.  **Response Assembly & Reconciliation:** The backend combines the results:
+    *   It uses the **total count from the website query (A)** as the source of truth for the number of studies.
+    *   It uses the **detailed trial data from the API query (B)** to populate the search results.
+5.  **Data Enhancement (Post-Reconciliation):**
+    *   For result sets ≤10 trials, AVA generates plain language summaries.
+    *   Medical terms are identified and linked to glossary definitions.
+6.  **Display:** The UI presents the enhanced, detailed data from the API, but displays the total study count that perfectly matches the ClinicalTrials.gov website, ensuring patient trust.
 
 ## 4. Enhanced Features (V2+ Roadmap)
 

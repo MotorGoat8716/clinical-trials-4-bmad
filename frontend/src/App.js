@@ -6,7 +6,7 @@ function App() {
   const [searchParams, setSearchParams] = useState({
     condition: '',
     location: '',
-    phase: '',
+    expr: '',
     studyStatus: '',
     ageGroup: '',
     sex: '',
@@ -59,14 +59,14 @@ function App() {
             value={searchParams.location}
             onChange={handleInputChange}
           />
-          <select name="phase" value={searchParams.phase} onChange={handleInputChange}>
-            <option value="">All Phases</option>
-            <option value="phase:0">Phase 0</option>
-            <option value="phase:1">Phase 1</option>
-            <option value="phase:2">Phase 2</option>
-            <option value="phase:3">Phase 3</option>
-            <option value="phase:4">Phase 4</option>
-          </select>
+          <input
+            type="text"
+            name="expr"
+            placeholder="Universal Search..."
+            value={searchParams.expr}
+            onChange={handleInputChange}
+            className="universal-search"
+          />
           <select name="studyStatus" value={searchParams.studyStatus} onChange={handleInputChange}>
             <option value="">All Statuses</option>
             <option value="RECRUITING">Recruiting</option>
@@ -79,9 +79,9 @@ function App() {
           </select>
           <select name="ageGroup" value={searchParams.ageGroup} onChange={handleInputChange}>
             <option value="">All Age Groups</option>
-            <option value="ages:child">Child (birth-17)</option>
-            <option value="ages:adult">Adult (18-64)</option>
-            <option value="ages:older">Older Adult (65+)</option>
+            <option value="CHILD">Child (birth-17)</option>
+            <option value="ADULT">Adult (18-64)</option>
+            <option value="OLDER_ADULT">Older Adult (65+)</option>
           </select>
           <select name="sex" value={searchParams.sex} onChange={handleInputChange}>
             <option value="">All Sexes</option>
@@ -103,13 +103,6 @@ function App() {
             <option value="NETWORK">Network</option>
             <option value="OTHER">Other</option>
           </select>
-          <input
-            type="text"
-            name="otherTerms"
-            placeholder="Other Terms (e.g., drug, device)"
-            value={searchParams.otherTerms}
-            onChange={handleInputChange}
-          />
           <button onClick={handleSearch} disabled={loading}>
             {loading ? 'Searching...' : 'Search'}
           </button>

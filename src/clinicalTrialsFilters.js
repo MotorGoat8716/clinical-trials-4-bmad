@@ -131,8 +131,8 @@ class ClinicalTrialsFilters {
         options: [
           { value: '', label: 'All' },
           { value: 'ALL', label: 'All' },
-          { value: 'FEMALE', label: 'Female' },
-          { value: 'MALE', label: 'Male' }
+          { value: 'sex:f', label: 'Female' },
+          { value: 'sex:m', label: 'Male' }
         ],
         description: 'Sex of participants eligible for the study'
       },

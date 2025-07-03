@@ -142,7 +142,19 @@ The development of the Clinical Trials Resource Hub MVP will be guided by the fo
 * **Patient-Centric Accessibility:** Add comprehension aids (plain language summaries, medical glossary, conversational guidance) while maintaining clinical accuracy and source transparency.
 * **Real-time Synchronization:** Ensure platform data remains current with ClinicalTrials.gov through reliable synchronization mechanisms.
 * **Privacy & Security (Core to MVP):** Adhere strictly to all relevant data privacy regulations while implementing patient-friendly features.
-* **Iterative Enhancement:** Continuously improve patient-centric features based on user feedback while maintaining unwavering commitment to source data integrity.
+*   **Iterative Enhancement:** Continuously improve patient-centric features based on user feedback while maintaining unwavering commitment to source data integrity.
+
+### 5.1.3. Search Architecture (Hybrid Approach)
+
+To ensure the highest fidelity with the patient experience on ClinicalTrials.gov, the application employs a hybrid search architecture. This approach is designed to combine the accurate result counts from the official website's search with the rich, structured data available through its API v2.
+
+*   **The Challenge:** The ClinicalTrials.gov website's search functionality and its public API have different filtering logic, which can lead to discrepancies in the total number of search results. For patients, seeing a consistent number is crucial for trust.
+*   **The Solution:**
+    1.  **Website Count First:** For any given search, the application first queries the ClinicalTrials.gov website's search page, parsing the resulting HTML to extract the exact total number of studies.
+    2.  **API for Details:** Concurrently, the application queries the API v2 with the same parameters to retrieve detailed, structured information for each trial.
+    3.  **Combined for Accuracy:** The application then presents the rich data from the API but displays the total count extracted from the website, ensuring the user sees the same total they would on the official site.
+
+This hybrid model ensures that while the user benefits from the enhanced data and UX of our application, the core experience of search result totals perfectly mirrors the authoritative source, maintaining patient trust. The primary technical challenge is accurately parsing the website's HTML for the count, especially as the website's structure may change over time.
 
 ## 5.2. High-Level Architecture Sketch
 
