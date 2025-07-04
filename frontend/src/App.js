@@ -28,7 +28,21 @@ function App() {
     setError(null);
     setSearchResults(null); // Clear previous results before new search
     try {
-      const response = await axios.get('/api/trials/search', { params: searchParams });
+      let apiParams = { ...searchParams };
+      
+      const studyTypeMap = {
+        'INTERVENTIONAL': 'studyType:int',
+        'OBSERVATIONAL': 'studyType:obs',
+        'EXPANDED_ACCESS': 'studyType:exp'
+      };
+    
+      if (searchParams.studyType && studyTypeMap[searchParams.studyType]) {
+        apiParams.aggFilters = searchParams.aggFilters ? `${searchParams.aggFilters},${studyTypeMap[searchParams.studyType]}` : studyTypeMap[searchParams.studyType];
+      }
+      
+      delete apiParams.studyType; // Remove studyType before sending to API
+
+      const response = await axios.get('/api/trials/search', { params: apiParams });
       setSearchResults(response.data);
     } catch (err) {
       setError('An error occurred while fetching the search results.');

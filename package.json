@@ -12,6 +12,7 @@
     "dev": "concurrently \"npm run start\" \"npm run start --prefix frontend\""
   },
   "dependencies": {
+    "ava": "^6.4.0",
     "axios": "^0.21.4",
     "cheerio": "^1.1.0",
     "express": "^4.17.1",

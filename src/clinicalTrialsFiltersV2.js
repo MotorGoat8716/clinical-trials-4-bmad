@@ -46,6 +46,15 @@ class ClinicalTrialsFiltersV2 {
         description: 'Search for other keywords in study titles, descriptions, etc.',
         working: true
       },
+
+      expr: {
+        label: 'Universal Search',
+        apiParam: 'expr',
+        type: 'text',
+        placeholder: 'e.g., Olaparib, Recruiting, Phase 3, Heart Attack',
+        description: 'A single, flexible input field that accepts a wide range of criteria.',
+        working: true
+      },
       
       sponsor: {
         label: 'Sponsor/Collaborator',
@@ -182,13 +191,18 @@ class ClinicalTrialsFiltersV2 {
   
     // Handle basic parameters
     if (filters.condition) {
-      params.cond = filters.condition;  // Changed from 'query.cond'
+      params.cond = filters.condition;
     }
-    
     if (filters.location) {
-      params.locStr = filters.location;  // Changed from 'query.locn'
+      params.locStr = filters.location;
     }
-    
+    if (filters.expr) {
+      params.expr = filters.expr;
+    }
+    if (filters.studyType) {
+      params.studyType = filters.studyType;
+    }
+
     // Handle aggFilters
     if (filters.sex) {
       aggFilters.push(filters.sex);

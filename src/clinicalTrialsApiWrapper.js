@@ -14,6 +14,7 @@ class ClinicalTrialsApiWrapper {
     const {
       condition = '',
       location = '',
+      expr = '', // Universal search
       phase = '',
       studyStatus = '',
       ageGroup = '',
@@ -544,13 +545,15 @@ class ClinicalTrialsApiWrapper {
     const {
       condition = '',
       location = '',
+      expr = '',
       phase = '',
       studyStatus = '',
       ageGroup = '',
       sex = '',
       studyType = '',
       funderType = '',
-      otherTerms = ''
+      otherTerms = '',
+      aggFilters = ''
     } = searchParams;
 
     const urlParams = new URLSearchParams();
@@ -594,27 +597,34 @@ class ClinicalTrialsApiWrapper {
       }
       
       // Combine with other terms if provided
-      const allTerms = otherTerms ? 
-        `${otherTerms} ${locationTerms.join(' ')}` : 
-        locationTerms.join(' ');
-      
-      urlParams.append('query.term', allTerms);
-      
-      // Don't use query.locn as it seems too restrictive
-      // urlParams.append('query.locn', location);
-      
-    } else if (otherTerms) {
-      urlParams.append('query.term', otherTerms);
+      const termParts = [expr, otherTerms, ...locationTerms].filter(Boolean);
+      if (termParts.length > 0) {
+        urlParams.append('query.term', termParts.join(' '));
+      }
+    } else {
+      const termParts = [expr, otherTerms].filter(Boolean);
+      if (termParts.length > 0) {
+        urlParams.append('query.term', termParts.join(' '));
+      }
     }
     
-    // Build aggFilters array for complex filtering
-    const aggFilters = [];
-    
+    const filters = [];
+
+    const studyTypeMap = {
+      'INTERVENTIONAL': 'studyType:int',
+      'OBSERVATIONAL': 'studyType:obs',
+      'EXPANDED_ACCESS': 'studyType:exp'
+    };
+
+    if (studyType && studyTypeMap[studyType]) {
+      filters.push(studyTypeMap[studyType]);
+    }
+
     // Filter parameters (exact matching)
     if (studyStatus) {
-      urlParams.append('filter.overallStatus', studyStatus);
+      filters.push(`overallStatus:${studyStatus.toLowerCase()}`); // ClinicalTrials.gov API uses lowercased overallStatus as aggFilter
     }
-    
+
     if (phase) {
       const phaseMap = {
         'EARLY_PHASE1': 'phase:0',
@@ -627,7 +637,7 @@ class ClinicalTrialsApiWrapper {
         'NA': 'phase:na'
       };
       if (phaseMap[phase]) {
-        aggFilters.push(phaseMap[phase]);
+        filters.push(phaseMap[phase]);
       }
     }
     
@@ -637,7 +647,7 @@ class ClinicalTrialsApiWrapper {
         'FEMALE': 'sex:f'
       };
       if (sexMap[sex]) {
-        aggFilters.push(sexMap[sex]);
+        filters.push(sexMap[sex]);
       }
     }
     
@@ -648,34 +658,36 @@ class ClinicalTrialsApiWrapper {
         'OLDER_ADULT': 'ages:older'
       };
       if (ageMap[ageGroup]) {
-        aggFilters.push(ageMap[ageGroup]);
+        filters.push(ageMap[ageGroup]);
       }
     }
-    
-    // Note: Study type filtering is not supported by ClinicalTrials.gov API v2
-    // The API doesn't provide a way to filter by INTERVENTIONAL/OBSERVATIONAL/EXPANDED_ACCESS
-    // We'll need to filter results client-side or use a different approach
-    
+        
     if (funderType) {
       const funderMap = {
         'INDUSTRY': 'funder:industry',
         'NIH': 'funder:nih',
-        'FEDERAL': 'funder:federal',
-        'OTHER': 'funder:other'
-      };
+        'FED': 'funder:federal', // Correct mapping for FED from your App.js
+        'INDIV': 'funder:other', // Assuming INDIV maps to 'other' or needs specific handling
+        'NETWORK': 'funder:other', // Assuming NETWORK maps to 'other' or needs specific handling
+        'OTHER': 'funder:other'      };
       if (funderMap[funderType]) {
-        aggFilters.push(funderMap[funderType]);
+        filters.push(funderMap[funderType]);
       }
     }
     
-    // Add aggFilters if we have any
-    if (aggFilters.length > 0) {
-      urlParams.append('aggFilters', aggFilters.join(','));
+    // Crucially, if aggFilters already exist from the client (App.js), combine them
+    // Make sure 'aggFilters' from `searchParams` is correctly parsed and added
+    if (aggFilters) {
+        aggFilters.split(',').forEach(filter => filters.push(filter));
     }
-    
+
+    if (filters.length > 0) {
+      urlParams.append('aggFilters', filters.join(','));
+    }
+
     urlParams.append('pageSize', pageSize.toString());
     urlParams.append('countTotal', 'true');
-    
+
     return `${this.apiUrl}?${urlParams.toString()}`;
   }
 
@@ -740,11 +752,11 @@ class ClinicalTrialsApiWrapper {
         'ADULT',
         'OLDER_ADULT'
       ],
-      studyType: [
-        'INTERVENTIONAL',
-        'OBSERVATIONAL',
-        'EXPANDED_ACCESS'
-      ],
+      studyType: {
+        'INTERVENTIONAL': 'int',
+        'OBSERVATIONAL': 'obs',
+        'EXPANDED_ACCESS': 'exp'
+      },
       funderType: [
         'INDUSTRY',
         'NIH',
