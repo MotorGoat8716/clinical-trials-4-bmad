@@ -213,7 +213,18 @@ class ClinicalTrialsFiltersV2 {
     }
     
     if (filters.studyStatus) {
-      aggFilters.push(filters.studyStatus);
+      const statusMap = {
+        'RECRUITING': 'overallStatus:recruiting',
+        'NOT_YET_RECRUITING': 'overallStatus:not-yet-recruiting',
+        'ACTIVE_NOT_RECRUITING': 'overallStatus:active-not-recruiting',
+        'COMPLETED': 'overallStatus:completed',
+        'ENROLLING_BY_INVITATION': 'overallStatus:enrolling-by-invitation',
+        'TERMINATED': 'overallStatus:terminated',
+        'WITHDRAWN': 'overallStatus:withdrawn'
+      };
+      if (statusMap[filters.studyStatus]) {
+        aggFilters.push(statusMap[filters.studyStatus]);
+      }
     }
     
     if (filters.ageGroup) {

@@ -620,9 +620,10 @@ class ClinicalTrialsApiWrapper {
       filters.push(studyTypeMap[studyType]);
     }
 
-    // Filter parameters (exact matching)
+    // Study status filter - use direct filter parameter (not aggFilters)
     if (studyStatus) {
-      filters.push(`overallStatus:${studyStatus.toLowerCase()}`); // ClinicalTrials.gov API uses lowercased overallStatus as aggFilter
+      // Direct filter parameter approach - this is the correct format for status filtering
+      urlParams.append('filter.overallStatus', studyStatus);
     }
 
     if (phase) {
