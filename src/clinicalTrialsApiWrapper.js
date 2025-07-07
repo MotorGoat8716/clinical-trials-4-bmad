@@ -124,13 +124,6 @@ class ClinicalTrialsApiWrapper {
     }
   }
 
-  // Remove website count method since it doesn't work
-  async getWebsiteCount(searchParams) {
-    // Website scraping doesn't work - always return 0 to use API count
-    console.log('Website scraping not supported - using API count');
-    return 0;
-  }
-
   async getWebsiteCount(searchParams) {
     try {
       // Test different URL complexity levels to isolate the issue
@@ -179,7 +172,6 @@ class ClinicalTrialsApiWrapper {
       }
       
       return 0;
-      
     } catch (error) {
       console.error('Error getting website count:', error.message);
       return 0;
@@ -217,7 +209,7 @@ class ClinicalTrialsApiWrapper {
         const html = response.data;
         const isSearchPage = html.includes('studies found') || 
                             html.includes('clinical trials') || 
-                            html.includes('search-results') ||
+                            html.includes('search-results') || 
                             html.includes('"totalCount"') ||
                             html.includes(' studies ') ||
                             /\d+\s+studies/i.test(html);
@@ -488,7 +480,6 @@ class ClinicalTrialsApiWrapper {
       
       console.log('No count found in HTML using any method');
       return 0;
-      
     } catch (error) {
       console.error('Error extracting count from HTML:', error.message);
       return 0;
@@ -498,46 +489,38 @@ class ClinicalTrialsApiWrapper {
   async getApiData(searchParams, pageSize) {
     try {
       const apiUrl = this.buildApiUrl(searchParams, pageSize);
-      console.log('Getting data from API:', apiUrl);
+      console.log('API URL:', apiUrl);
 
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'ClinicalTrialsWrapper/1.0'
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         },
         timeout: 30000
       });
 
-      if (response.status === 200) {
+      if (response.status === 200 && response.data) {
         const data = response.data;
-        const studies = data.studies || [];
-        
-        // Format studies for consistent response
-        const formattedStudies = studies.map(study => ({
-          nctId: study.protocolSection?.identificationModule?.nctId || '',
-          title: study.protocolSection?.identificationModule?.briefTitle || '',
-          status: study.protocolSection?.statusModule?.overallStatus || '',
-          condition: study.protocolSection?.conditionsModule?.conditions?.[0] || '',
-          phase: study.protocolSection?.designModule?.phases?.[0] || '',
-          studyType: study.protocolSection?.designModule?.studyType || '',
-          enrollment: study.protocolSection?.designModule?.enrollmentInfo?.count || 0,
-          startDate: study.protocolSection?.statusModule?.startDateStruct?.date || '',
-          location: study.protocolSection?.contactsLocationsModule?.locations?.[0]?.city || '',
-          sponsor: study.protocolSection?.sponsorCollaboratorsModule?.leadSponsor?.name || ''
-        }));
-
         return {
-          studies: formattedStudies,
+          studies: data.studies || [],
           totalCount: data.totalCount || 0,
           nextPageToken: data.nextPageToken || null
         };
+      } else {
+        console.error('API response not successful:', response.status);
+        return {
+          studies: [],
+          totalCount: 0,
+          nextPageToken: null
+        };
       }
-      
-      return { studies: [], totalCount: 0, nextPageToken: null };
-      
     } catch (error) {
-      console.error('Error getting API data:', error.message);
-      return { studies: [], totalCount: 0, nextPageToken: null };
+      console.error('Error fetching API data:', error.message);
+      return {
+        studies: [],
+        totalCount: 0,
+        nextPageToken: null
+      };
     }
   }
 
@@ -553,218 +536,156 @@ class ClinicalTrialsApiWrapper {
       studyType = '',
       funderType = '',
       otherTerms = '',
-      aggFilters = ''
+      pageToken = ''
     } = searchParams;
 
-    const urlParams = new URLSearchParams();
+    const params = new URLSearchParams();
     
-    // Query parameters (search terms)
-    if (condition) urlParams.append('query.cond', condition);
+    // Add search terms
+    if (condition) params.append('query.cond', condition);
+    if (location) params.append('query.locn', location);
+    if (expr) params.append('query.term', expr);
+    if (otherTerms) params.append('query.term', otherTerms);
     
-    // Simplified location handling - less is more
-    if (location) {
-      // Strategy: Use ONLY the location as provided, don't over-complicate
-      const locationTerms = [];
-      
-      // Just add the basic location components
-      const parts = location.split(',').map(s => s.trim());
-      if (parts.length >= 2) {
-        const city = parts[0];
-        const state = parts[1];
-        
-        // Add city and state simply
-        locationTerms.push(city);
-        
-        // Convert common state abbreviations
-        const stateExpansions = {
-          'MA': 'Massachusetts',
-          'NY': 'New York', 
-          'CA': 'California',
-          'IL': 'Illinois',
-          'PA': 'Pennsylvania',
-          'TX': 'Texas',
-          'FL': 'Florida'
-        };
-        
-        if (stateExpansions[state.toUpperCase()]) {
-          locationTerms.push(stateExpansions[state.toUpperCase()]);
-        } else {
-          locationTerms.push(state);
-        }
-      } else {
-        // Single location term
-        locationTerms.push(location);
-      }
-      
-      // Combine with other terms if provided
-      const termParts = [expr, otherTerms, ...locationTerms].filter(Boolean);
-      if (termParts.length > 0) {
-        urlParams.append('query.term', termParts.join(' '));
-      }
-    } else {
-      const termParts = [expr, otherTerms].filter(Boolean);
-      if (termParts.length > 0) {
-        urlParams.append('query.term', termParts.join(' '));
-      }
-    }
+    // Add filters
+    if (phase) params.append('filter.phase', phase);
+    if (studyStatus) params.append('filter.overallStatus', studyStatus);
+    if (ageGroup) params.append('filter.ageGroup', ageGroup);
+    if (sex) params.append('filter.sex', sex);
+    if (studyType) params.append('filter.studyType', studyType);
+    if (funderType) params.append('filter.funderType', funderType);
     
-    const filters = [];
-
-    const studyTypeMap = {
-      'INTERVENTIONAL': 'studyType:int',
-      'OBSERVATIONAL': 'studyType:obs',
-      'EXPANDED_ACCESS': 'studyType:exp'
-    };
-
-    if (studyType && studyTypeMap[studyType]) {
-      filters.push(studyTypeMap[studyType]);
-    }
-
-    // Study status filter - use direct filter parameter (not aggFilters)
-    if (studyStatus) {
-      // Direct filter parameter approach - this is the correct format for status filtering
-      urlParams.append('filter.overallStatus', studyStatus);
-    }
-
-    if (phase) {
-      const phaseMap = {
-        'EARLY_PHASE1': 'phase:0',
-        'PHASE1': 'phase:1',
-        'PHASE1_PHASE2': 'phase:1',
-        'PHASE2': 'phase:2',
-        'PHASE2_PHASE3': 'phase:2',
-        'PHASE3': 'phase:3',
-        'PHASE4': 'phase:4',
-        'NA': 'phase:na'
-      };
-      if (phaseMap[phase]) {
-        filters.push(phaseMap[phase]);
-      }
-    }
+    // Add pagination
+    params.append('pageSize', pageSize.toString());
+    if (pageToken) params.append('pageToken', pageToken);
     
-    if (sex) {
-      const sexMap = {
-        'MALE': 'sex:m',
-        'FEMALE': 'sex:f'
-      };
-      if (sexMap[sex]) {
-        filters.push(sexMap[sex]);
-      }
-    }
+    // Add format
+    params.append('format', 'json');
     
-    if (ageGroup) {
-      const ageMap = {
-        'CHILD': 'ages:child',
-        'ADULT': 'ages:adult',
-        'OLDER_ADULT': 'ages:older'
-      };
-      if (ageMap[ageGroup]) {
-        filters.push(ageMap[ageGroup]);
-      }
-    }
-        
-    if (funderType) {
-      const funderMap = {
-        'INDUSTRY': 'funder:industry',
-        'NIH': 'funder:nih',
-        'FED': 'funder:federal', // Correct mapping for FED from your App.js
-        'INDIV': 'funder:other', // Assuming INDIV maps to 'other' or needs specific handling
-        'NETWORK': 'funder:other', // Assuming NETWORK maps to 'other' or needs specific handling
-        'OTHER': 'funder:other'      };
-      if (funderMap[funderType]) {
-        filters.push(funderMap[funderType]);
-      }
-    }
-    
-    // Crucially, if aggFilters already exist from the client (App.js), combine them
-    // Make sure 'aggFilters' from `searchParams` is correctly parsed and added
-    if (aggFilters) {
-        aggFilters.split(',').forEach(filter => filters.push(filter));
-    }
-
-    if (filters.length > 0) {
-      urlParams.append('aggFilters', filters.join(','));
-    }
-
-    urlParams.append('pageSize', pageSize.toString());
-    urlParams.append('countTotal', 'true');
-
-    return `${this.apiUrl}?${urlParams.toString()}`;
+    return `${this.apiUrl}?${params.toString()}`;
   }
 
-  // Helper method to get just the count (uses website only)
-  async getTrialCount(searchParams) {
-    return await this.getWebsiteCount(searchParams);
-  }
-
-  // Legacy method for backward compatibility
-  async getTrialDetails(nctId) {
-    try {
-      const response = await axios.get(`${this.apiUrl}/${nctId}`, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClinicalTrialsWrapper/1.0'
-        },
-        timeout: 30000
-      });
-      
-      if (response.status === 200) {
-        return response.data;
-      } else {
-        throw new Error(`API returned status ${response.status}`);
-      }
-    } catch (error) {
-      console.error(`Error getting trial details for ${nctId}:`, error.message);
-      return null;
-    }
-  }
-
-  // Method to get available filter options
-  getAvailableFilters() {
-    return {
-      studyStatus: [
-        'RECRUITING',
-        'NOT_YET_RECRUITING', 
-        'COMPLETED',
-        'SUSPENDED',
-        'TERMINATED',
-        'WITHDRAWN',
-        'ACTIVE_NOT_RECRUITING',
-        'ENROLLING_BY_INVITATION',
-        'UNKNOWN'
-      ],
-      phase: [
-        'EARLY_PHASE1',
-        'PHASE1',
-        'PHASE1_PHASE2',
-        'PHASE2',
-        'PHASE2_PHASE3',
-        'PHASE3',
-        'PHASE4',
-        'NA'
-      ],
-      sex: [
-        'MALE',
-        'FEMALE',
-        'ALL'
-      ],
-      ageGroup: [
-        'CHILD',
-        'ADULT',
-        'OLDER_ADULT'
-      ],
-      studyType: {
-        'INTERVENTIONAL': 'int',
-        'OBSERVATIONAL': 'obs',
-        'EXPANDED_ACCESS': 'exp'
+  /**
+   * Generates plain language explanations for clinical trial fields
+   * @param {string} fieldName - The field name to explain
+   * @param {string} fieldValue - The value of the field
+   * @returns {string} Plain language explanation
+   */
+  getFieldExplanation(fieldName, fieldValue) {
+    if (!fieldValue) return '';
+    
+    const explanations = {
+      phase: {
+        'EARLY_PHASE1': 'This is a very early study testing a new treatment for the first time in humans.',
+        'PHASE1': 'This is an early study testing the safety and best dose of a new treatment.',
+        'PHASE1_PHASE2': 'This study tests both safety and effectiveness of a treatment.',
+        'PHASE2': 'This study tests whether a treatment works and continues to monitor safety.',
+        'PHASE2_PHASE3': 'This study tests effectiveness in a larger group while comparing to standard treatment.',
+        'PHASE3': 'This large study compares the new treatment to the current standard treatment.',
+        'PHASE4': 'This study monitors long-term effects after a treatment has been approved.',
+        'NA': 'This study does not test a new treatment or drug.'
       },
-      funderType: [
-        'INDUSTRY',
-        'NIH',
-        'FEDERAL',
-        'OTHER'
-      ]
+      
+      overallStatus: {
+        'RECRUITING': 'This study is currently accepting new participants.',
+        'NOT_YET_RECRUITING': 'This study has not started recruiting participants yet.',
+        'ACTIVE_NOT_RECRUITING': 'This study is ongoing but not accepting new participants.',
+        'COMPLETED': 'This study has finished and is no longer recruiting participants.',
+        'SUSPENDED': 'This study has been temporarily stopped.',
+        'TERMINATED': 'This study has been stopped early and will not continue.',
+        'WITHDRAWN': 'This study was stopped before it started recruiting participants.'
+      },
+      
+      studyType: {
+        'INTERVENTIONAL': 'This study tests a specific treatment or intervention.',
+        'OBSERVATIONAL': 'This study observes participants without giving them a specific treatment.',
+        'EXPANDED_ACCESS': 'This study provides access to experimental treatments outside of regular clinical trials.'
+      },
+      
+      sex: {
+        'FEMALE': 'This study only includes female participants.',
+        'MALE': 'This study only includes male participants.',
+        'ALL': 'This study includes participants of all genders.'
+      },
+      
+      ageGroup: {
+        'CHILD': 'This study includes children (under 18 years old).',
+        'ADULT': 'This study includes adults (18-65 years old).',
+        'OLDER_ADULT': 'This study includes older adults (65+ years old).'
+      },
+      
+      funderType: {
+        'INDUSTRY': 'This study is funded by a pharmaceutical or biotechnology company.',
+        'NIH': 'This study is funded by the National Institutes of Health.',
+        'FEDERAL': 'This study is funded by the federal government.',
+        'OTHER': 'This study is funded by universities, foundations, or other organizations.'
+      }
     };
+    
+    const fieldExplanations = explanations[fieldName.toLowerCase()];
+    if (fieldExplanations) {
+      return fieldExplanations[fieldValue.toUpperCase()] || fieldValue;
+    }
+    
+    return fieldValue;
+  }
+
+  /**
+   * Generates a comprehensive plain language summary of a clinical trial
+   * @param {object} trial - The clinical trial data
+   * @returns {string} Plain language summary
+   */
+  generatePlainLanguageSummary(trial) {
+    const parts = [];
+    
+    // Basic description
+    if (trial.briefTitle) {
+      parts.push(`Study Title: ${trial.briefTitle}`);
+    }
+    
+    if (trial.condition) {
+      parts.push(`This study focuses on ${trial.condition.toLowerCase()}.`);
+    }
+    
+    // Study type and phase
+    if (trial.studyType) {
+      parts.push(this.getFieldExplanation('studyType', trial.studyType));
+    }
+    
+    if (trial.phase) {
+      parts.push(this.getFieldExplanation('phase', trial.phase));
+    }
+    
+    // Status
+    if (trial.overallStatus) {
+      parts.push(this.getFieldExplanation('overallStatus', trial.overallStatus));
+    }
+    
+    // Participant criteria
+    const participantInfo = [];
+    if (trial.sex) {
+      participantInfo.push(this.getFieldExplanation('sex', trial.sex));
+    }
+    if (trial.minimumAge || trial.maximumAge) {
+      const ageRange = `Ages ${trial.minimumAge || 'any'} to ${trial.maximumAge || 'any'}`;
+      participantInfo.push(`Participant age range: ${ageRange}`);
+    }
+    
+    if (participantInfo.length > 0) {
+      parts.push('Participant Requirements: ' + participantInfo.join(' '));
+    }
+    
+    // Location
+    if (trial.locationCountries) {
+      parts.push(`This study is taking place in: ${trial.locationCountries.join(', ')}`);
+    }
+    
+    // Funding
+    if (trial.funderType) {
+      parts.push(this.getFieldExplanation('funderType', trial.funderType));
+    }
+    
+    return parts.join(' ');
   }
 }
 

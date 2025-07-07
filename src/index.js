@@ -24,6 +24,19 @@ const pool = new Pool({
 
 app.use(express.json());
 
+// CORS middleware (if needed)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 app.get('/api/trials/search', async (req, res) => {
   try {
     console.log('Search request:', req.query);
@@ -136,37 +149,210 @@ app.get('/api/trials/search', async (req, res) => {
   }
 });
 
-// Add endpoint to get trial details by NCT ID
-app.get('/api/trials/:nctId', async (req, res) => {
-  const { nctId } = req.params;
+// Fixed endpoint to get trial details by NCT ID - matches both old and new frontend patterns
+app.get('/api/trials/details/:trial_id', async (req, res) => {
+  const { trial_id } = req.params;
+  console.log(`Fetching trial details for: ${trial_id}`);
 
   try {
-    const study = await clinicalTrialsApi.getTrialDetails(nctId);
+    // Search for the specific trial using the wrapper
+    const searchResult = await clinicalTrialsApi.searchTrials({
+      otherTerms: trial_id,
+      pageSize: 1
+    });
     
-    // The hybrid wrapper returns properly formatted data
-    const transformedStudy = {
-      trial_id: study.protocolSection?.identificationModule?.nctId || nctId,
-      title: study.protocolSection?.identificationModule?.briefTitle || '',
-      condition: study.protocolSection?.conditionsModule?.conditions?.[0] || '',
-      summary: study.protocolSection?.identificationModule?.briefSummary || '',
-      status: study.protocolSection?.statusModule?.overallStatus || '',
-      phase: study.protocolSection?.designModule?.phases?.[0] || '',
-      location: study.protocolSection?.contactsLocationsModule?.locations?.[0]?.city || '',
-      official_url: `https://clinicaltrials.gov/study/${nctId}`,
-      last_updated: study.protocolSection?.statusModule?.lastUpdatePostDateStruct?.date || ''
+    if (searchResult.studies && searchResult.studies.length > 0) {
+      const study = searchResult.studies[0];
+      
+      // Extract and normalize the trial data
+      const trial = {
+        nctId: study.protocolSection?.identificationModule?.nctId || trial_id,
+        title: study.protocolSection?.identificationModule?.briefTitle,
+        officialTitle: study.protocolSection?.identificationModule?.officialTitle,
+        summary: study.protocolSection?.descriptionModule?.briefSummary,
+        detailedDescription: study.protocolSection?.descriptionModule?.detailedDescription,
+        eligibilityCriteria: study.protocolSection?.eligibilityModule?.eligibilityCriteria,
+        phase: study.protocolSection?.designModule?.phases?.[0],
+        status: study.protocolSection?.statusModule?.overallStatus,
+        studyType: study.protocolSection?.designModule?.studyType,
+        conditions: study.protocolSection?.conditionsModule?.conditions || [],
+        interventions: study.protocolSection?.armsInterventionsModule?.interventions || [],
+        primaryOutcomes: study.protocolSection?.outcomesModule?.primaryOutcomes || [],
+        secondaryOutcomes: study.protocolSection?.outcomesModule?.secondaryOutcomes || [],
+        minimumAge: study.protocolSection?.eligibilityModule?.minimumAge,
+        maximumAge: study.protocolSection?.eligibilityModule?.maximumAge,
+        sex: study.protocolSection?.eligibilityModule?.sex,
+        contacts: study.protocolSection?.contactsLocationsModule?.centralContacts || [],
+        locations: study.protocolSection?.contactsLocationsModule?.locations || [],
+        official_url: `https://clinicaltrials.gov/study/${trial_id}`
+      };
+      
+      res.json(trial);
+    } else {
+      res.status(404).json({ 
+        error: 'Trial not found',
+        trial_id: trial_id,
+        message: `Clinical trial with ID ${trial_id} was not found.`
+      });
+    }
+    
+  } catch (error) {
+    console.error(`Error fetching trial ${trial_id}:`, error);
+    res.status(500).json({ 
+      error: 'Failed to fetch trial details',
+      trial_id: trial_id,
+      details: error.message
+    });
+  }
+});
+
+// Also keep the alternative endpoint for compatibility
+app.get('/api/trials/:nctId', async (req, res) => {
+  const { nctId } = req.params;
+  
+  // Redirect to the details endpoint
+  req.params.trial_id = nctId;
+  return app._router.handle(Object.assign(req, { url: `/api/trials/details/${nctId}`, path: `/api/trials/details/${nctId}` }), res);
+});
+
+// AI Summary Generation Endpoint
+app.post('/api/generate-summary', async (req, res) => {
+  try {
+    console.log('Generate summary request received:', req.body);
+    const { trial, type } = req.body;
+    
+    if (!trial) {
+      return res.status(400).json({ 
+        error: 'Trial data is required',
+        summary: 'No trial data provided for summary generation.'
+      });
+    }
+
+    let summary = '';
+    
+    if (type === 'summary') {
+      // Generate AI summary using the ava module
+      try {
+        console.log('Generating AI summary for trial:', trial.nctId);
+        summary = await ava.getSummary({
+          TrialID: trial.nctId,
+          Title: trial.title || trial.officialTitle,
+          Condition: trial.conditions ? trial.conditions.join(', ') : '',
+          Summary: trial.summary || trial.detailedDescription || '',
+          Status: trial.status || '',
+          Phase: trial.phase || ''
+        }, 'summary');
+      } catch (aiError) {
+        console.warn('AI summary failed, falling back to wrapper method:', aiError.message);
+        // Fallback to the wrapper's plain language method
+        summary = clinicalTrialsApi.generatePlainLanguageSummary(trial);
+      }
+    } else if (type === 'detailed_description') {
+      // Generate detailed plain language description
+      try {
+        console.log('Generating detailed AI description for trial:', trial.nctId);
+        summary = await ava.getSummary({
+          TrialID: trial.nctId,
+          Title: trial.title || trial.officialTitle,
+          Condition: trial.conditions ? trial.conditions.join(', ') : '',
+          Summary: trial.detailedDescription || trial.summary || '',
+          Status: trial.status || '',
+          Phase: trial.phase || ''
+        }, 'detailed_description');
+        
+        // If AI returns a short response, enhance it with wrapper method
+        if (summary.length < 200) {
+          const wrapperSummary = clinicalTrialsApi.generatePlainLanguageSummary(trial);
+          summary = summary + '\n\n' + wrapperSummary;
+        }
+      } catch (aiError) {
+        console.warn('AI detailed description failed, falling back to wrapper method:', aiError.message);
+        summary = clinicalTrialsApi.generatePlainLanguageSummary(trial);
+      }
+    } else if (type === 'eligibility') {
+      // Generate plain language eligibility explanation
+      try {
+        console.log('Generating eligibility explanation for trial:', trial.nctId);
+        summary = await ava.getSummary({
+          TrialID: trial.nctId,
+          Title: trial.title || trial.officialTitle,
+          Condition: trial.conditions ? trial.conditions.join(', ') : '',
+          Summary: trial.eligibilityCriteria || '',
+          Status: trial.status || '',
+          Phase: trial.phase || ''
+        }, 'eligibility');
+      } catch (aiError) {
+        console.warn('AI eligibility explanation failed:', aiError.message);
+        summary = 'Plain language eligibility explanation not available at this time.';
+      }
+    } else {
+      // Default to basic summary
+      summary = clinicalTrialsApi.generatePlainLanguageSummary(trial);
+    }
+
+    // Ensure we always return something meaningful
+    if (!summary || summary.trim() === '') {
+      summary = 'Unable to generate plain language summary for this clinical trial at this time.';
+    }
+
+    console.log(`Summary generated for ${trial.nctId}: ${summary.substring(0, 100)}...`);
+
+    res.json({ 
+      success: true, 
+      summary: summary,
+      trialId: trial.nctId,
+      type: type
+    });
+
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate summary',
+      summary: 'Unable to generate plain language summary due to a technical error.',
+      details: error.message
+    });
+  }
+});
+
+// Test endpoints for debugging
+app.get('/api/test-env', (req, res) => {
+  res.json({
+    PROJECT_ID: process.env.PROJECT_ID ? 'Set' : 'Not set',
+    LOCATION: process.env.LOCATION || 'Not set',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY ? 'Set' : 'Not set',
+    NODE_ENV: process.env.NODE_ENV || 'Not set'
+  });
+});
+
+app.get('/api/test-ai', async (req, res) => {
+  try {
+    console.log('Testing AI functionality...');
+    
+    const testTrial = {
+      TrialID: 'TEST123',
+      Title: 'Test Clinical Trial for Cancer Treatment',
+      Condition: 'Cancer',
+      Summary: 'This is a test study to evaluate a new cancer treatment.',
+      Status: 'RECRUITING',
+      Phase: 'PHASE2'
     };
     
+    const summary = await ava.getSummary(testTrial, 'summary');
+    
     res.json({
-      ...transformedStudy,
-      source: 'ClinicalTrials.gov API (Hybrid)',
-      official_url: `https://clinicaltrials.gov/study/${nctId}`
+      success: true,
+      message: 'AI test completed',
+      testTrial: testTrial,
+      generatedSummary: summary,
+      timestamp: new Date().toISOString()
     });
+    
   } catch (error) {
-    console.error(`Error fetching trial ${nctId}:`, error);
-    res.status(404).json({ 
-      error: 'Trial not found',
-      nctId: nctId,
-      source: 'ClinicalTrials.gov API (Hybrid)'
+    console.error('AI test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'AI test failed'
     });
   }
 });
@@ -263,12 +449,14 @@ app.get('/api/stats', (req, res) => {
       real_time_api: true,
       website_accuracy: true,
       sex_filtering: true,
-      hybrid_approach: true
+      hybrid_approach: true,
+      ai_summaries: true
     },
     accuracyFeatures: {
       websiteCountMatching: true,
       sexFilterAccuracy: true,
-      realTimeData: true
+      realTimeData: true,
+      plainLanguageGeneration: true
     }
   });
 });
@@ -278,11 +466,21 @@ if (require.main === module) {
     console.log(`Clinical Trials Resource Hub (ClinicalTrials.gov Wrapper) running on http://localhost:${port}`);
     console.log('API Endpoints:');
     console.log('  GET /api/trials/search - Search trials with comprehensive ClinicalTrials.gov filters');
+    console.log('  GET /api/trials/details/:trial_id - Get specific trial details (legacy)');
     console.log('  GET /api/trials/:nctId - Get specific trial details');
+    console.log('  POST /api/generate-summary - Generate AI plain language summaries');
+    console.log('  GET /api/test-env - Test environment variables');
+    console.log('  GET /api/test-ai - Test AI functionality');
     console.log('  GET /api/filters - Get all available filter options');
     console.log('  GET /api/filters/basic - Get basic filter options for simple UI');
     console.log('  GET /api/filters/advanced - Get advanced filter options');
     console.log('  GET /api/stats - Get API wrapper statistics');
+    console.log('');
+    console.log('New Features:');
+    console.log('  ✅ AI-powered plain language summaries');
+    console.log('  ✅ Detailed description generation');
+    console.log('  ✅ Eligibility criteria explanations');
+    console.log('  ✅ Fallback to rule-based explanations');
     console.log('');
     console.log('Comprehensive Filter System:');
     console.log('  ✅ Study Status, Phase, Age Groups, Sex');
@@ -302,6 +500,10 @@ if (require.main === module) {
       console.error('An unhandled error occurred:', err);
     }
   });
+}
+
+if (clinicalTrialsApi.getTrialDetailsRoute) {
+  clinicalTrialsApi.getTrialDetailsRoute(app);
 }
 
 module.exports = { app, pool, clinicalTrialsApi };
